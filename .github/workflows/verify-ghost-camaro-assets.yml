@@ -1,0 +1,44 @@
+name: Verify Ghost Camaro original Unity assets
+
+on:
+  push:
+    branches:
+      - feature/ghost-camaro-driveable-unity6
+  pull_request:
+    paths:
+      - 'Assets/Humanitarian/Vehicles/GhostCamaro/**'
+      - '.github/workflows/verify-ghost-camaro-assets.yml'
+
+jobs:
+  verify-original-vehicle-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+      - name: Reassemble, hash-check and inspect Ghost Camaro FBX + PNG
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, zipfile, io
+          source = Path("Assets/Humanitarian/Vehicles/GhostCamaro/Source/Parts")
+          fragments = [source / f"part{i:03}.bin" for i in range(43)]
+          assert all(p.is_file() for p in fragments), "Missing binary fragment"
+          data = b"".join(p.read_bytes() for p in fragments)
+          digest = hashlib.sha256(data).hexdigest()
+          assert len(data) == 13209459, f"Wrong length {len(data)}"
+          assert digest == "a3f68a701ef60946c1c93fc5a0add5d9c400110b7be515010a33dea18cbc7348", digest
+          with zipfile.ZipFile(io.BytesIO(data)) as z:
+              expected = {
+                  "Models/GhostCamaro.fbx",
+                  "Textures/Ghost_Camaro_Textures.png",
+                  "Textures/Ghost_Camaro_V5_FX.png",
+                  "Textures/Glass_V5.png",
+                  "Textures/Side_Tint_V5.png",
+              }
+              assert set(z.namelist()) == expected, set(z.namelist()) ^ expected
+              fbx = z.read("Models/GhostCamaro.fbx")
+              assert fbx.startswith(b"Kaydara FBX Binary"), "Not a binary FBX"
+              assert b"Wheel_FL" in fbx and b"Door_L_Open" in fbx, "Important model nodes/animations missing"
+              print(f"Validated Ghost Camaro: {len(fbx):,} FBX bytes, 4 PNG files, {digest}")
+          PY
