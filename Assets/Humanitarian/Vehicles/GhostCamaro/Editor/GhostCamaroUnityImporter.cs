@@ -164,7 +164,20 @@ namespace Humanitarian.EditorTools
                 var visual = (GameObject)PrefabUtility.InstantiatePrefab(asset);
                 visual.name = "Visual";
                 visual.transform.SetParent(root.transform, false);
-                var animator = visual.GetComponent<Animator>() ?? visual.AddComponent<Animator>();
+                // UnityEngine.Object uses special null semantics: a missing/destroyed
+                // component may compare equal to null while ?? still sees a managed wrapper.
+                // Do not use GetComponent<Animator>() ?? AddComponent<Animator>() here.
+                var animator = visual.GetComponent<Animator>();
+                if (animator == null)
+                {
+                    animator = visual.AddComponent<Animator>();
+                    Debug.Log("Ghost Camaro: added missing Animator to imported Visual root.");
+                }
+                if (animator == null)
+                    throw new InvalidOperationException(
+                        "Ghost Camaro: failed to add an Animator to the imported Visual root. " +
+                        "Check the imported FBX prefab and Console for an earlier error.");
+
                 animator.runtimeAnimatorController = controller;
                 animator.applyRootMotion = false;
                 var rig = root.AddComponent<GhostCamaroRigReferences>();
