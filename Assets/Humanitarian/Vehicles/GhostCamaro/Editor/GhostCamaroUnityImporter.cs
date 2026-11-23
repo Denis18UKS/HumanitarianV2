@@ -28,23 +28,48 @@ namespace Humanitarian.EditorTools
             ("Textures/Vehicles/Side_Tint_V5.png", Base + "/Textures/Side_Tint_V5.png")
         };
 
-        [MenuItem("Humanitarian/Ghost Camaro/1. Import from original mixed ZIP...")]
+        [MenuItem("Humanitarian/Ghost Camaro/1. Import from ZIP (original or Unity package)...")]
         public static void ImportMixedArchive()
         {
-            string path = EditorUtility.OpenFilePanel("Select GhostCamaro-NEXT-FULL-PROJECT ZIP", "", "zip");
+            string path = EditorUtility.OpenFilePanel("Select original GhostCamaro ZIP or Unity Stage 1 ZIP", "", "zip");
             if (string.IsNullOrEmpty(path)) return;
             try
             {
                 using (var archive = ZipFile.OpenRead(path))
                 {
-                    foreach (var entry in Sources)
+                    // Resolve and validate ALL required files before writing anything into Assets.
+                    // The original mixed ZIP and the Unity-only package use different directories.
+                    var selected = Sources.Select(source => new
                     {
-                        var member = archive.GetEntry(entry.zipEntry);
-                        if (member == null) throw new FileNotFoundException("Required asset missing from archive", entry.zipEntry);
-                        string destination = Path.GetFullPath(entry.unityPath);
+                        source.zipEntry,
+                        source.unityPath,
+                        member = FindZipMember(archive, source.zipEntry, source.unityPath)
+                    }).ToList();
+
+                    var missing = selected.Where(x => x.member == null)
+                        .Select(x => "- " + x.zipEntry + "\n  or " + x.unityPath)
+                        .ToArray();
+                    if (missing.Length > 0)
+                    {
+                        string availableFbx = string.Join("\n", archive.Entries
+                            .Where(x => x.FullName.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
+                            .Take(8).Select(x => "  " + x.FullName));
+                        throw new FileNotFoundException(
+                            "This ZIP does not contain all required Ghost Camaro assets.\n\nMissing:\n" +
+                            string.Join("\n", missing) +
+                            "\n\nSelect GhostCamaro-NEXT-FULL-PROJECT(1).zip or " +
+                            "Humanitarian_GhostCamaro_Unity_Import_Stage1.zip.\n" +
+                            (availableFbx.Length > 0 ? "\nFBX files found:\n" + availableFbx : "\nNo FBX files were found."));
+                    }
+
+                    foreach (var item in selected)
+                    {
+                        string destination = Path.GetFullPath(item.unityPath);
                         Directory.CreateDirectory(Path.GetDirectoryName(destination));
-                        using (var input = member.Open())
-                        using (var output = File.Create(destination)) input.CopyTo(output);
+                        using (var input = item.member.Open())
+                        using (var output = File.Create(destination))
+                            input.CopyTo(output);
+                        Debug.Log("Ghost Camaro ZIP: " + item.member.FullName + " -> " + item.unityPath);
                     }
                 }
                 AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
@@ -55,6 +80,38 @@ namespace Humanitarian.EditorTools
                 Debug.LogException(exception);
                 EditorUtility.DisplayDialog("Ghost Camaro import failed", exception.Message, "OK");
             }
+        }
+
+        // Accept either source layout, including ZIPs with an extra top-level directory.
+        // Never select unrelated Minecraft/Blockbench resources by filename alone.
+        private static ZipArchiveEntry FindZipMember(ZipArchive archive, string originalPath, string unityPath)
+        {
+            string[] expectedPaths = { originalPath, unityPath };
+            var files = archive.Entries.Where(x => !string.IsNullOrEmpty(x.Name)).ToArray();
+
+            foreach (string expected in expectedPaths)
+            {
+                var exact = files.FirstOrDefault(x =>
+                    string.Equals(NormalizeZipPath(x.FullName), expected, StringComparison.OrdinalIgnoreCase));
+                if (exact != null) return exact;
+            }
+
+            foreach (string expected in expectedPaths)
+            {
+                var matches = files.Where(x => NormalizeZipPath(x.FullName)
+                    .EndsWith("/" + expected, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (matches.Length == 1) return matches[0];
+                if (matches.Length > 1)
+                    throw new InvalidDataException("Ambiguous archive layout. More than one entry matches: " +
+                        expected + "\n" + string.Join("\n", matches.Select(x => x.FullName)));
+            }
+
+            return null;
+        }
+
+        private static string NormalizeZipPath(string value)
+        {
+            return value.Replace('\\', '/').TrimStart('/');
         }
 
         [MenuItem("Humanitarian/Ghost Camaro/2. Rebuild preview clips and prefab")]
