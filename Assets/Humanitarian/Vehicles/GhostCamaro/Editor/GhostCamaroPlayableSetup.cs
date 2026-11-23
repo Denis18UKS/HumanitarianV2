@@ -86,6 +86,7 @@ namespace Humanitarian.EditorTools
                             visual.localRotation = Quaternion.FromToRotation(direction.normalized, Vector3.forward)
                                 * visual.localRotation;
                     }
+                    NormalizeModelToMeters(visual);
                     BindURPMaterials(visual);
                     var animator = visual.GetComponent<Animator>();
                     if (animator == null) animator = visual.gameObject.AddComponent<Animator>();
@@ -138,6 +139,25 @@ namespace Humanitarian.EditorTools
                 return AssetDatabase.LoadAssetAtPath<GameObject>(Prefab);
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
+        }
+
+        private static void NormalizeModelToMeters(Transform visual)
+        {
+            var renderers = visual.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return;
+            Bounds modelBounds = renderers[0].bounds;
+            foreach (var renderer in renderers) modelBounds.Encapsulate(renderer.bounds);
+            float depth = modelBounds.size.z;
+            if (depth > 0.001f)
+            {
+                float factor = 5.18f / depth; // Original Ghost Camaro bounding length from source GLB.
+                if (factor > 0.01f && factor < 100f)
+                    visual.localScale *= factor;
+            }
+            modelBounds = renderers[0].bounds;
+            foreach (var renderer in renderers) modelBounds.Encapsulate(renderer.bounds);
+            // Align the model with the root: ground = Y0, body centered in X/Z.
+            visual.position -= new Vector3(modelBounds.center.x, modelBounds.min.y, modelBounds.center.z);
         }
 
         private static AnimatorController EnsurePreviewController()
