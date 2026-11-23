@@ -162,6 +162,15 @@ namespace Humanitarian.EditorTools
 
         private static AnimatorController EnsurePreviewController()
         {
+            var modelImporter = AssetImporter.GetAtPath(Fbx) as ModelImporter;
+            if (modelImporter != null &&
+                (!modelImporter.importAnimation || modelImporter.animationType != ModelImporterAnimationType.Generic))
+            {
+                modelImporter.importAnimation = true;
+                modelImporter.animationType = ModelImporterAnimationType.Generic;
+                modelImporter.importBlendShapes = true;
+                modelImporter.SaveAndReimport();
+            }
             Ensure(Base + "/Animations");
             var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(Controller);
             if (controller == null)
