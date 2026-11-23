@@ -8,7 +8,7 @@ The repository branch contains a selective archive importer and scripts that gen
 
 ## Steps
 
-1. Open the Unity project on `feature/ghost-camaro-unity-import`.
+1. Open the Unity project with the latest importer fix branch `fix/ghost-camaro-zip-import-layouts` (or after its eventual merge).
 2. Choose **Humanitarian > Ghost Camaro > 1. Import from ZIP (original or Unity package)...**
 3. Select either the original `GhostCamaro-NEXT-FULL-PROJECT(1).zip` or the prepared `Humanitarian_GhostCamaro_Unity_Import_Stage1.zip`. Both layouts are supported, including ZIPs with an extra top-level directory.
 4. Importer extracts only the Ghost Camaro FBX and four vehicle PNGs, whether they live under `Exports/FBX/` + `Textures/Vehicles/` or the prepared Unity `Assets/Humanitarian/Vehicles/GhostCamaro/` paths. It validates all five entries before writing, and reports missing paths if necessary.
