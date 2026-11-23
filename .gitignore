@@ -1,0 +1,30 @@
+# Unity generated files
+Library/
+Temp/
+Obj/
+Logs/
+UserSettings/
+MemoryCaptures/
+
+# Build outputs
+[Bb]uild/
+[Bb]uilds/
+
+# IDE generated files
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.userprefs
+
+# Unity Version Control
+.plastic/
+
+# OS temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
