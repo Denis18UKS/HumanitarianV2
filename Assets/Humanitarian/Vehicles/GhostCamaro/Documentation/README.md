@@ -1,28 +1,72 @@
-# Ghost Camaro — Stage 1 Unity Import (HumanitarianV2)
+# Ghost Camaro — Humanitarian / Unity 6 driving demo
 
-Target: Unity 6000.6.4f1, URP 17.6.0, Input System 1.20.0.
+Target editor: **Unity 6000.6.4f1** (URP 17.6.0, Input System 1.20.0).
 
-## Status
+## What this PR does
 
-The repository branch contains a selective archive importer and scripts that generate a prefab with named subpart references and a **preview** AnimatorController. The binary FBX/textures are **not pushed** in this branch; import them from the original local mixed ZIP to avoid adding Minecraft/Fabric and unneeded assets. This code has not been executed inside the user's Unity Editor.
+- GitHub includes **the actual original Ghost Camaro FBX (40.4 MB) and four PNG textures**, not Minecraft/Fabric assets. Because the connected GitHub uploader limits large single requests, the five-file vehicle-only ZIP is stored in `Source/Parts/part000.bin` through `part042.bin` and reassembled by the Unity Editor.
+- On the first Unity import, `GhostCamaroAutoBootstrap` joins the 43 binary fragments, checks their **SHA-256**, extracts exactly the vehicle FBX and four textures, and generates a drivable prefab and test scene.
+- Physically simulated rear-wheel-drive car, four WheelColliders, Rigidbody, collisions, throttle/brake/reverse, handbrake, independent visual wheel movement and steering wheel.
+- Chase/cockpit/front camera cycling (F5), walking demo character (E enter/exit), compact speed HUD.
+- Headlights, brake lights, left/right indicators, hazard lights.
+- Source FBX animation clips indexed into a preview AnimatorController for inspection where Unity actually imports them. **These clips are not all simultaneously layered in gameplay yet.**
 
-## Steps
+## Open and drive
 
-1. Open the Unity project with the latest importer fix branch `fix/ghost-camaro-zip-import-layouts` (or after its eventual merge).
-2. Choose **Humanitarian > Ghost Camaro > 1. Import from ZIP (original or Unity package)...**
-3. Select either the original `GhostCamaro-NEXT-FULL-PROJECT(1).zip` or the prepared `Humanitarian_GhostCamaro_Unity_Import_Stage1.zip`. Both layouts are supported, including ZIPs with an extra top-level directory.
-4. Importer extracts only the Ghost Camaro FBX and four vehicle PNGs, whether they live under `Exports/FBX/` + `Textures/Vehicles/` or the prepared Unity `Assets/Humanitarian/Vehicles/GhostCamaro/` paths. It validates all five entries before writing, and reports missing paths if necessary.
-5. It generates `Assets/Humanitarian/Vehicles/GhostCamaro/Prefabs/GhostCamaro.prefab` and an AnimatorController.
-6. Drag the prefab into a test scene, inspect materials/size/pivots and test clips in Play Mode using `GhostCamaroAnimationPreview`.
-7. Inspect Import Settings > Animation: the original GLB includes 62 named clips; actual FBX import count may vary.
+1. Check out `feature/ghost-camaro-driveable-unity6` in the repository (you do **not** need the original mixed ZIP).
+2. Open the Unity project using **Unity 6000.6.4f1**. Wait until import and script compilation finish. The first-time bootstrap should auto-create and open:
+   `Assets/Humanitarian/Scenes/GhostCamaro_DrivingDemo.unity`.
+3. If not created automatically, open **Humanitarian > Ghost Camaro > 3. Build DRIVEABLE car + demo scene**.
+4. Press **Play**. Driver starts in the car with engine on.
+5. Use controls below. Press **E** to exit, approach the car on foot, and **E** to enter again.
 
-## Important caveats
+| Key | Action |
+|---|---|
+| W | Accelerate |
+| S | Brake, then reverse |
+| A / D | Steer |
+| Space | Handbrake |
+| R | Engine on/off |
+| F5 | Cycle chase, front, cockpit |
+| E | Enter/exit |
+| L | Headlamps |
+| Z / X | Left/right turn signal |
+| C | Hazard lights |
+| Esc | Unlock/relock cursor |
 
-* This is **asset staging only**. No car physics, independent animations, HUD, camera or damage gameplay is implemented here.
-* The preview AnimatorController can play one state at a time, not independent door/wheels/brake/light layers.
-* Check the glass transparency and material remapping manually: the FBX's source materials may import differently under URP.
-* Source GLB: 716 nodes, 604 meshes, 62 animation clips. The FBX may not preserve every clip precisely.
-* Do not import any Minecraft files, .jar, Fabric assets, Blockbench packs, or other objects into this Unity stage.
-* Keep `Assets/`, `Packages/`, `ProjectSettings/` under version control; ignore `Library/`, `Temp/` and `Logs/`.
+## Generated project assets
 
-The local asset-ready ZIP package is available separately from ChatGPT. Its Unity `Assets/` folder can be copied into the project if needed.
+After import Unity creates:
+
+- `Assets/Humanitarian/Vehicles/GhostCamaro/Models/GhostCamaro.fbx`
+- `Assets/Humanitarian/Vehicles/GhostCamaro/Textures/*.png`
+- `Assets/Humanitarian/Vehicles/GhostCamaro/Materials/*.mat`
+- `Assets/Humanitarian/Vehicles/GhostCamaro/Animations/GhostCamaro_Preview.controller`
+- `Assets/Humanitarian/Vehicles/GhostCamaro/Prefabs/GhostCamaro_Driveable.prefab`
+- `Assets/Humanitarian/Scenes/GhostCamaro_DrivingDemo.unity`
+
+Source fragments are tracked in Git; generated files are ignored to avoid huge duplicate commits.
+
+## Bundled model verification
+
+- Packed archive size: **13,209,459 bytes**
+- Part count: **43**
+- SHA-256: `a3f68a701ef60946c1c93fc5a0add5d9c400110b7be515010a33dea18cbc7348`
+- Contents: `Models/GhostCamaro.fbx` plus four vehicle PNGs only.
+- Source GLB inspected separately: **716 nodes, 604 meshes, 62 named animation clips**. The number of animation clips retained by FBX must be verified inside Unity, and should not be assumed to be 62.
+
+## Limitations and validation
+
+This change was **not compiled or played in Unity on this execution environment**. Code, archive contents and SHA-256 were inspected; no in-editor behaviour is claimed verified yet. Verify wheel positions / collision geometry / directional orientation, cockpit view, FBX material/UV mapping, transparent glass, model scaling and actual animation clip imports.
+
+The current `GhostCamaroAnimationPreview` and generated AnimatorController offer **single-clip preview**, not full multi-layer coordination of every animation. Wipers, doors, hood, trunk, damage, interior hand animations, exhaust and complex engine audio are next milestones. The current car controller uses procedurally updated wheel/steering poses and actual Unity Light components.
+
+## Troubleshooting
+
+- **Missing model**: Console should contain `Ghost Camaro: verified original FBX and 4 textures from GitHub (SHA-256 OK)`. If not, check `Source/Parts/part000.bin` ... `part042.bin`.
+- **No scene**: choose `Humanitarian > Ghost Camaro > 3. Build DRIVEABLE car + demo scene`.
+- **No scripts/menu**: inspect Unity **Console** for the first C# compilation error.
+- **Prefab incorrect**: rebuild with menu #3, inspect `GhostCamaroRigReferences` and WheelCollider positions.
+- **Git status shows imported generated assets**: ensure the branch .gitignore matches this stage.
+
+**Branch policy**: do not push directly to `main`; this milestone is delivered in a dedicated feature branch with its own PR.
