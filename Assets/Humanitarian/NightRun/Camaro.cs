@@ -42,7 +42,9 @@ public sealed class Camaro : MonoBehaviour
                 for(int j=0;j<count;j++) {v[j]=ReadVector(r);indices[j]=j%3==1?j+1:j%3==2?j-1:j;}
                 var m=new Mesh();m.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;m.vertices=v;m.triangles=indices;m.RecalculateNormals();m.RecalculateBounds();
                 child.AddComponent<MeshFilter>().sharedMesh=m;
-                var renderer=child.AddComponent<MeshRenderer>();renderer.material=new Material(Shader.Find(UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline ? "Universal Render Pipeline/Lit" : "Standard")); renderer.material.color=color;
+                var renderer=child.AddComponent<MeshRenderer>();var pipeline=UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+                if(pipeline && pipeline.defaultMaterial)renderer.sharedMaterial=pipeline.defaultMaterial;
+                else renderer.sharedMaterial=Resources.GetBuiltinResource<Material>("Default-Material.mat"); renderer.material.color=color;
             }
         }
         for(int i=0;i<4;i++) {

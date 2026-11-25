@@ -16,14 +16,42 @@ public sealed class NightRun : MonoBehaviour {
     bool doors,hood;
     float steer,gas, sensitivity=1,look; bool hand;
     const string Slot="Humanitarian.NightRoute.1";
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void Boot(){if(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name=="NightRoute")new GameObject("Ночной рейс").AddComponent<NightRun>();}
-    void Start(){
-        route=JsonUtility.FromJson<Route>(Resources.Load<TextAsset>("route").text);
-        World(); car=new GameObject("Ghost Camaro").AddComponent<Camaro>();car.Assemble();
-        car.impact=Damage;cam=new GameObject("Камера").AddComponent<Camera>();cam.gameObject.AddComponent<AudioListener>();cam.nearClipPlane=.035f;cam.farClipPlane=1100;
+    bool worldReady;
+    bool loadCheckpoint;
+    string startupError;
+    void Awake(){
+        cam=new GameObject("Камера").AddComponent<Camera>();
+        cam.gameObject.AddComponent<AudioListener>();
+        cam.nearClipPlane=.035f;cam.farClipPlane=1100;
         cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=new Color(.045f,.067f,.11f);
-        bool saved=PlayerPrefs.HasKey(Slot); ResetTrip(saved);if(!saved)PlayerPrefs.DeleteKey(Slot);page="Меню";
+        Debug.Log("Humanitarian: главное меню открыто");
+    }
+    void BeginTrip(bool load){
+        if(page=="Загрузка")return;
+        loadCheckpoint=load;
+        page="Загрузка";
+        StartCoroutine(LoadTrip());
+    }
+    System.Collections.IEnumerator LoadTrip(){
+        yield return null;
+        yield return null;
+        try{
+            if(!worldReady){
+                var data=Resources.Load<TextAsset>("route");
+                if(!data)throw new InvalidOperationException("Отсутствует ресурс route.json");
+                route=JsonUtility.FromJson<Route>(data.text);
+                World();
+                car=new GameObject("Ghost Camaro").AddComponent<Camaro>();
+                car.Assemble();
+                car.impact=Damage;
+                worldReady=true;
+            }
+            ResetTrip(loadCheckpoint);
+        }catch(Exception ex){
+            startupError=ex.Message;
+            Debug.LogException(ex);
+            page="Ошибка запуска рейса";
+        }
     }
     void World(){
         RenderSettings.ambientLight=new Color(.35f,.39f,.48f);
@@ -81,6 +109,7 @@ public sealed class NightRun : MonoBehaviour {
     void Update(){
         var k=Keyboard.current;if(k==null)return;
         if(k.escapeKey.wasPressedThisFrame){if(page=="Рейс")page="Пауза";else if(page=="Пауза")page="Рейс";}
+        if(page=="Меню" && k.enterKey.wasPressedThisFrame){BeginTrip(false);return;}
         if(page!="Рейс")return;
         gas=(k.wKey.isPressed?1:0)-(k.sKey.isPressed?1:0);steer=(k.dKey.isPressed?1:0)-(k.aKey.isPressed?1:0);hand=k.spaceKey.isPressed;
         if(car.body.linearVelocity.magnitude<.5f){
@@ -97,6 +126,7 @@ public sealed class NightRun : MonoBehaviour {
         if(k.rKey.wasPressedThisFrame)ResetTrip(true);
     }
     void FixedUpdate(){
+        if(!worldReady)return;
         bool active=page=="Рейс";car.body.isKinematic=!active;
         if(!active)return;
         car.Drive(gas,steer,hand,Mass(),trip.stage>0&&!trip.lid);
@@ -104,15 +134,23 @@ public sealed class NightRun : MonoBehaviour {
         if(trip.fuel<=0||trip.health<=0)page="Рейс прерван";
     }
     void LateUpdate(){
+        if(!worldReady || trip==null)return;
         var t=car.transform;var dir=t.rotation*Quaternion.Euler(0,look,0);
         cam.transform.position=cabin?t.TransformPoint(new Vector3(-.4f,1.02f,.03f)):t.position+dir*new Vector3(0,3.3f,-6.5f);
         cam.transform.rotation=cabin?dir:Quaternion.LookRotation(t.position+Vector3.up*.7f-cam.transform.position);
     }
     void OnGUI(){
-        if(trip==null)return;GUI.matrix=Matrix4x4.Scale(Vector3.one*Mathf.Clamp(Screen.height/750f,.75f,2f));
+        GUI.matrix=Matrix4x4.Scale(Vector3.one*Mathf.Clamp(Screen.height/750f,.75f,2f));
         GUILayout.BeginArea(new Rect(20,20,440,700),GUI.skin.box);
         GUILayout.Label("HUMANITARIAN   /   Ночной рейс");
-        if(page=="Рейс"){
+        if(page=="Загрузка"){GUILayout.Label("Загрузка маршрута и Ghost Camaro…");}
+        else if(page=="Ошибка запуска рейса"){
+            GUILayout.Label("Не удалось открыть рейс");
+            GUILayout.Label(startupError);
+            GUILayout.Label(Application.consoleLogPath);
+            if(GUILayout.Button("Вернуться в главное меню"))
+                UnityEngine.SceneManagement.SceneManager.LoadScene("NightRoute");
+        }else if(page=="Рейс"){
             GUILayout.Label(route.stops[trip.stage].name+"   •   "+Distance().ToString("0")+" м");
             GUILayout.Label($"{car.body.linearVelocity.magnitude*3.6f:0} км/ч    Топливо {trip.fuel:0}%    Кузов {trip.health:0}%");
             GUILayout.Label($"Курс на цель {Vector3.SignedAngle(car.transform.forward,route.stops[trip.stage].Pos-car.body.position,Vector3.up):+0;-0;0}°   Передано {Mathf.Max(0,trip.stage-1)}/3");
@@ -125,8 +163,8 @@ public sealed class NightRun : MonoBehaviour {
             GUILayout.Label(page);
             if(page!="Меню"&&page!="Пауза"){Manifest();GUILayout.Label($"Время {trip.seconds/60:0.0} мин • топливо {trip.fuel:0}% • кузов {trip.health:0}%");}
             if(page=="Пауза"&&GUILayout.Button("Вернуться за руль"))page="Рейс";
-            if(PlayerPrefs.HasKey(Slot)&&GUILayout.Button("Продолжить с контрольной точки"))ResetTrip(true);
-            if(GUILayout.Button("Начать новый рейс"))ResetTrip(false);
+            if(PlayerPrefs.HasKey(Slot)&&GUILayout.Button("Продолжить с контрольной точки"))BeginTrip(true);
+            if(GUILayout.Button("Начать новый рейс  [Enter]"))BeginTrip(false);
             GUILayout.Label("W/S газ и тормоз с реверсом • A/D руль • Space ручник • E погрузка и передача • R контрольная точка");
             GUILayout.Label("Громкость");AudioListener.volume=GUILayout.HorizontalSlider(AudioListener.volume,0,1);
             GUILayout.Label("Чувствительность обзора (ПКМ)");sensitivity=GUILayout.HorizontalSlider(sensitivity,.3f,2);
