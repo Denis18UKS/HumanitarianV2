@@ -110,7 +110,7 @@ void ANightCar::Build(){
     Ready=Parts.Contains(TEXT("Trunk"))&&Stops.Num()==5&&Cargo.Num()==3;
 }
 void ANightCar::BeginPlay(){
-    Super::BeginPlay();Build();
+    Super::BeginPlay();
     TArray<uint8> Wav;
     if(FFileHelper::LoadFileToArray(Wav,*(FPaths::ProjectContentDir()/TEXT("Route/idle.wav")))&&Wav.Num()>44){
         auto* Tone=NewObject<USoundWaveProcedural>(this);Tone->SetSampleRate(22050);Tone->NumChannels=1;Tone->Duration=INDEFINITELY_LOOPING_DURATION;
@@ -120,9 +120,15 @@ void ANightCar::BeginPlay(){
         Motor=NewObject<UAudioComponent>(this);AddInstanceComponent(Motor);Motor->SetupAttachment(Bounds);Motor->RegisterComponent();Motor->SetSound(Tone);Motor->SetVolumeMultiplier(0);Motor->Play();
     }
     Trip=NewObject<UTripSave>(this);
-    SetActorLocation(FVector(0,0,60));if(Ready)Sync();else Screen=TEXT("Ошибка загрузки ресурсов");
+    SetActorLocation(FVector(0,0,60));
 }
 void ANightCar::Restart(bool Restore){
+    if(!Ready){
+        if(BuildAttempted)return;
+        BuildAttempted=true;
+        Build();
+        if(!Ready){Screen=TEXT("Ошибка загрузки ресурсов");return;}
+    }
     auto* Prior=Restore?Cast<UTripSave>(UGameplayStatics::LoadGameFromSlot(Slot,0)):nullptr;
     Trip=Prior?Prior:NewObject<UTripSave>(this);
     if(!Prior)Trip->Point=FVector(0,0,60);
@@ -163,7 +169,7 @@ void ANightCar::Interact(){
     Sync();Store();
 }
 void ANightCar::Tick(float Dt){
-    Super::Tick(Dt);auto* PC=Cast<APlayerController>(GetController());if(!PC||!Ready)return;
+    Super::Tick(Dt);auto* PC=Cast<APlayerController>(GetController());if(!PC)return;
     auto Key=[PC](FKey K){return PC->WasInputKeyJustPressed(K);};
     auto Held=[PC](FKey K){return PC->IsInputKeyDown(K);};
     if(Key(EKeys::Escape)){if(Screen==TEXT("Рейс"))Screen=TEXT("Пауза");else if(Screen==TEXT("Пауза"))Screen=TEXT("Рейс");}
@@ -171,7 +177,7 @@ void ANightCar::Tick(float Dt){
         if(Key(EKeys::V))Volume=Volume>=1?0:FMath::Min(1.f,Volume+.25f);
         if(Key(EKeys::B))Sensitivity=Sensitivity>=.9f?.15f:Sensitivity+.15f;
         if(Key(EKeys::G)){auto* Settings=GEngine->GetGameUserSettings();if(Settings){Settings->SetOverallScalabilityLevel((Settings->GetOverallScalabilityLevel()+1)%4);Settings->ApplySettings(false);}}
-        if(Key(EKeys::N))Restart(false);
+        if(Key(EKeys::N)||Key(EKeys::Enter))Restart(false);
         if(Key(EKeys::R)&&UGameplayStatics::DoesSaveGameExist(Slot,0))Restart(true);
         if(Key(EKeys::M))Screen=TEXT("Меню");
         if(Key(EKeys::Q))PC->ConsoleCommand(TEXT("quit"));
@@ -219,6 +225,13 @@ void ANightHUD::DrawHUD(){
     DrawRect(FLinearColor(.022,.035,.055,.87),16*S,16*S,620*S,(P->Inventory||P->Screen!=TEXT("Рейс")?390:235)*S);
     Line(TEXT("HUMANITARIAN    /    Ночной рейс"),FLinearColor(.93,.73,.39));
     Line(P->Screen);
+    if(P->Screen==TEXT("Меню")){
+        Line(TEXT("Enter • Начать новый рейс"));
+        if(UGameplayStatics::DoesSaveGameExist(Slot,0))Line(TEXT("R • Продолжить с контрольной точки"));
+        Line(FString::Printf(TEXT("V • Громкость %.0f%%     B • Обзор %.2f     G • Качество"),P->Volume*100,P->Sensitivity));
+        Line(TEXT("Q • Выход"));return;
+    }
+    if(P->Screen==TEXT("Ошибка загрузки ресурсов")){Line(TEXT("Проверьте файлы Content/Route. Q • Выход"));return;}
     if(P->Names.Num()!=5)return;
     if(P->Screen==TEXT("Рейс")){
         Line(FString::Printf(TEXT("%s • %.0f м"),*P->Names[P->Trip->Stage],P->Distance()));

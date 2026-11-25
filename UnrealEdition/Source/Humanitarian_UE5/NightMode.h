@@ -54,6 +54,7 @@ private:
     void Store();
     void Sync();
     UStaticMeshComponent* Block(FVector P,FVector Size,FLinearColor Color,bool Car=false,bool Solid=false);
+    bool BuildAttempted=false;
     bool Cabin=false,Headlights=true,Ready=false;
     float Roll=0,Look=0;
 };
