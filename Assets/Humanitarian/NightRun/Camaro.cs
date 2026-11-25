@@ -20,9 +20,23 @@ public sealed class Camaro : MonoBehaviour
     public static GameObject Block(string name,Vector3 pos,Vector3 size,Color color,Transform parent=null,bool solid=true) {
         var obj=GameObject.CreatePrimitive(PrimitiveType.Cube);
         obj.name=name; obj.transform.SetParent(parent,false); obj.transform.localPosition=pos;
-        obj.transform.localScale=size; obj.GetComponent<Renderer>().material.color=color;
+        obj.transform.localScale=size;
+        string texture=name=="Дорога"?"Asphalt":name=="Дом"?"Brick":name=="Ground"?"Grass":null;
+        var surface=new Material(Surface(false));
+        surface.SetColor("_BaseColor",color);
+        if(texture!=null){
+            surface.SetTexture("_BaseMap",Resources.Load<Texture2D>(texture));
+            surface.SetTextureScale("_BaseMap",new Vector2(size.x/3, (texture=="Brick"?size.y:size.z)/3));
+        }
+        obj.GetComponent<Renderer>().sharedMaterial=surface;
         obj.GetComponent<Collider>().enabled=solid;
         return obj;
+    }
+    public static Material Surface(bool transparent){
+        string key=transparent?"NightGlass":"NightLit";
+        var material=Resources.Load<Material>(key);
+        if(!material || !material.shader.isSupported)throw new System.InvalidOperationException("Недоступен материал "+key);
+        return material;
     }
     public void Assemble() {
         body=gameObject.AddComponent<Rigidbody>(); body.mass=1450; body.centerOfMass=new Vector3(0,.28f,0);
@@ -32,19 +46,22 @@ public sealed class Camaro : MonoBehaviour
             int sections=r.ReadInt32();
             for(int i=0;i<sections;i++) {
                 string group=Encoding.ASCII.GetString(r.ReadBytes(32)).TrimEnd('\0');
-                Color32 color=new Color32(r.ReadByte(),r.ReadByte(),r.ReadByte(),255);
+                string atlas=Encoding.ASCII.GetString(r.ReadBytes(32)).TrimEnd('\0');
                 var pivot=ReadVector(r);
                 if(!parts.TryGetValue(group,out var parent)) {
                     parent=new GameObject(group).transform;parent.SetParent(transform,false);parent.localPosition=pivot;parts.Add(group,parent);
                 }
                 var child=new GameObject("Surface");child.transform.SetParent(parent,false);
-                int count=r.ReadInt32();var v=new Vector3[count];var indices=new int[count];
-                for(int j=0;j<count;j++) {v[j]=ReadVector(r);indices[j]=j%3==1?j+1:j%3==2?j-1:j;}
-                var m=new Mesh();m.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;m.vertices=v;m.triangles=indices;m.RecalculateNormals();m.RecalculateBounds();
+                int count=r.ReadInt32();var v=new Vector3[count];var indices=new int[count];var uv=new Vector2[count];
+                for(int j=0;j<count;j++) {v[j]=ReadVector(r);uv[j]=new Vector2(r.ReadSingle(),r.ReadSingle());indices[j]=j%3==1?j+1:j%3==2?j-1:j;}
+                var m=new Mesh();m.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;m.vertices=v;m.uv=uv;m.triangles=indices;m.RecalculateNormals();m.RecalculateBounds();
                 child.AddComponent<MeshFilter>().sharedMesh=m;
-                var renderer=child.AddComponent<MeshRenderer>();var pipeline=UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
-                if(pipeline && pipeline.defaultMaterial)renderer.sharedMaterial=pipeline.defaultMaterial;
-                else renderer.sharedMaterial=Resources.GetBuiltinResource<Material>("Default-Material.mat"); renderer.material.color=color;
+                bool glass=atlas=="Glass_V5"||atlas=="Side_Tint_V5";
+                var material=new Material(Surface(glass));
+                var texture=Resources.Load<Texture2D>(atlas);
+                if(!texture)throw new InvalidDataException("Нет текстуры "+atlas);
+                material.SetTexture("_BaseMap", texture);
+                child.AddComponent<MeshRenderer>().sharedMaterial=material;
             }
         }
         for(int i=0;i<4;i++) {

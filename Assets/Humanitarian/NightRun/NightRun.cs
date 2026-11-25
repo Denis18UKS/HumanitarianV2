@@ -10,7 +10,7 @@ using UnityEngine.InputSystem;
     public float fuel=100,health=100,seconds,yaw; public Vector3 position; public bool lid;
 }
 
-public sealed class NightRun : MonoBehaviour {
+public sealed partial class NightRun : MonoBehaviour {
     Route route; Trip trip; Camaro car; Camera cam;
     string page="Меню", radio=""; bool cabin, headlights=true, map, cargo;
     bool doors,hood;
@@ -24,6 +24,7 @@ public sealed class NightRun : MonoBehaviour {
         cam.gameObject.AddComponent<AudioListener>();
         cam.nearClipPlane=.035f;cam.farClipPlane=1100;
         cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=new Color(.045f,.067f,.11f);
+        LoadOptions();
         Debug.Log("Humanitarian: главное меню открыто");
     }
     void BeginTrip(bool load){
@@ -44,7 +45,9 @@ public sealed class NightRun : MonoBehaviour {
                 car=new GameObject("Ghost Camaro").AddComponent<Camaro>();
                 car.Assemble();
                 car.impact=Damage;
+                weather=new NightWeather(cam.transform);
                 worldReady=true;
+                ApplyOptions();
             }
             ResetTrip(loadCheckpoint);
         }catch(Exception ex){
@@ -108,7 +111,7 @@ public sealed class NightRun : MonoBehaviour {
     string EndTitle()=>Array.Exists(trip.quality,q=>q<50)?"Частичный успех":"Рейс завершён";
     void Update(){
         var k=Keyboard.current;if(k==null)return;
-        if(k.escapeKey.wasPressedThisFrame){if(page=="Рейс")page="Пауза";else if(page=="Пауза")page="Рейс";}
+        if(k.escapeKey.wasPressedThisFrame){if(page=="Рейс")page="Пауза";else if(page=="Пауза")page="Рейс";else if(page=="Настройки" || page=="Управление"){SaveOptions();page=returnPage;}}
         if(page=="Меню" && k.enterKey.wasPressedThisFrame){BeginTrip(false);return;}
         if(page!="Рейс")return;
         gas=(k.wKey.isPressed?1:0)-(k.sKey.isPressed?1:0);steer=(k.dKey.isPressed?1:0)-(k.aKey.isPressed?1:0);hand=k.spaceKey.isPressed;
@@ -138,40 +141,7 @@ public sealed class NightRun : MonoBehaviour {
         var t=car.transform;var dir=t.rotation*Quaternion.Euler(0,look,0);
         cam.transform.position=cabin?t.TransformPoint(new Vector3(-.4f,1.02f,.03f)):t.position+dir*new Vector3(0,3.3f,-6.5f);
         cam.transform.rotation=cabin?dir:Quaternion.LookRotation(t.position+Vector3.up*.7f-cam.transform.position);
-    }
-    void OnGUI(){
-        GUI.matrix=Matrix4x4.Scale(Vector3.one*Mathf.Clamp(Screen.height/750f,.75f,2f));
-        GUILayout.BeginArea(new Rect(20,20,440,700),GUI.skin.box);
-        GUILayout.Label("HUMANITARIAN   /   Ночной рейс");
-        if(page=="Загрузка"){GUILayout.Label("Загрузка маршрута и Ghost Camaro…");}
-        else if(page=="Ошибка запуска рейса"){
-            GUILayout.Label("Не удалось открыть рейс");
-            GUILayout.Label(startupError);
-            GUILayout.Label(Application.consoleLogPath);
-            if(GUILayout.Button("Вернуться в главное меню"))
-                UnityEngine.SceneManagement.SceneManager.LoadScene("NightRoute");
-        }else if(page=="Рейс"){
-            GUILayout.Label(route.stops[trip.stage].name+"   •   "+Distance().ToString("0")+" м");
-            GUILayout.Label($"{car.body.linearVelocity.magnitude*3.6f:0} км/ч    Топливо {trip.fuel:0}%    Кузов {trip.health:0}%");
-            GUILayout.Label($"Курс на цель {Vector3.SignedAngle(car.transform.forward,route.stops[trip.stage].Pos-car.body.position,Vector3.up):+0;-0;0}°   Передано {Mathf.Max(0,trip.stage-1)}/3");
-            GUILayout.Label(Hint());GUILayout.Label(radio);
-            GUILayout.Label("C камера   L свет   Tab груз   M маршрут   Esc пауза");
-            if(map){DrawMap();}
-            if(map)GUILayout.Label("Склад → Сосновый двор → правый объезд → Медпункт → Водонапорная станция → Гараж");
-            if(cargo)Manifest();
-        }else{
-            GUILayout.Label(page);
-            if(page!="Меню"&&page!="Пауза"){Manifest();GUILayout.Label($"Время {trip.seconds/60:0.0} мин • топливо {trip.fuel:0}% • кузов {trip.health:0}%");}
-            if(page=="Пауза"&&GUILayout.Button("Вернуться за руль"))page="Рейс";
-            if(PlayerPrefs.HasKey(Slot)&&GUILayout.Button("Продолжить с контрольной точки"))BeginTrip(true);
-            if(GUILayout.Button("Начать новый рейс  [Enter]"))BeginTrip(false);
-            GUILayout.Label("W/S газ и тормоз с реверсом • A/D руль • Space ручник • E погрузка и передача • R контрольная точка");
-            GUILayout.Label("Громкость");AudioListener.volume=GUILayout.HorizontalSlider(AudioListener.volume,0,1);
-            GUILayout.Label("Чувствительность обзора (ПКМ)");sensitivity=GUILayout.HorizontalSlider(sensitivity,.3f,2);
-            if(GUILayout.Button("Качество: "+QualitySettings.names[QualitySettings.GetQualityLevel()]))QualitySettings.SetQualityLevel((QualitySettings.GetQualityLevel()+1)%QualitySettings.names.Length);
-            if(page!="Меню"&&GUILayout.Button("Главное меню"))page="Меню";
-            if(GUILayout.Button("Выход"))Application.Quit();
-        }GUILayout.EndArea();
+        weather.Tick(page=="Рейс",weatherMode, fogLevel, cam);
     }
     void DrawMap(){
         Rect box=GUILayoutUtility.GetRect(240,165); GUI.Box(box,"");
