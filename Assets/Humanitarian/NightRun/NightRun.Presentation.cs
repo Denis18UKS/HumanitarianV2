@@ -7,13 +7,13 @@ public sealed partial class NightRun {
     bool showRadio;
     string returnPage="Меню";
     Texture2D cover;
-    static readonly string[] Skies={"Туман","Дождь и туман","Ливень и туман"};
+    static readonly string[] Skies={"Туман","Дождь и туман","Ливень и туман","Гроза и туман"};
     static readonly int[] Caps={30,60,90,120};
     static readonly Color Ink=new Color(.031f,.055f,.069f), Cream=new Color(.91f,.9f,.84f), Gold=new Color(.92f,.68f,.33f);
     const string Prefix="NightRoute.Options.";
     void LoadOptions(){
         if(PlayerPrefs.HasKey(Prefix+"quality"))QualitySettings.SetQualityLevel(Mathf.Clamp(PlayerPrefs.GetInt(Prefix+"quality"),0,QualitySettings.names.Length-1));
-        weatherMode=Mathf.Clamp(PlayerPrefs.GetInt(Prefix+"weather",1),0,2);
+        weatherMode=Mathf.Clamp(PlayerPrefs.GetInt(Prefix+"weather",1),0,3);
         fogLevel=Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix+"fog",.35f));
         seatLift=Mathf.Clamp(PlayerPrefs.GetFloat(Prefix+"seatLift",0),-.045f,.045f);
         sensitivity=PlayerPrefs.GetFloat(Prefix+"mouse",1);fov=PlayerPrefs.GetFloat(Prefix+"fov",65);
@@ -49,10 +49,12 @@ public sealed partial class NightRun {
         GUI.matrix=Matrix4x4.TRS(new Vector3((Screen.width-1280*scale)/2,(Screen.height-720*scale)/2,0),Quaternion.identity,Vector3.one*scale);
         if(page=="Рейс"){Hud();return;}
         if(page=="Настройки"){Options();return;}
-        if(cover)GUI.DrawTexture(new Rect(462,0,818,720),cover,ScaleMode.ScaleAndCrop);
+        if(page=="Мастерская"){Workshop();return;}
+        if(page=="Меню"&&showroom!=null)GUI.DrawTexture(new Rect(462,0,818,720),showroom.image,ScaleMode.ScaleToFit);
+        else if(cover)GUI.DrawTexture(new Rect(462,0,818,720),cover,ScaleMode.ScaleAndCrop);
         Panel(new Rect(0,0,462,720),Ink);Panel(new Rect(44,91,46,3),Gold);
         Label(44,110,410,63,"HUMANITARIAN",46,Cream,true);
-        Label(44,173,395,40,page=="Меню"?"Ночной рейс":page,25,Gold);
+        Label(44,173,395,40,page=="Меню"?"Сараево  •  1994":page,25,Gold);
         if(page=="Загрузка"){Label(44,240,370,75,"Подготовка машины и маршрута…",20,Cream);return;}
         if(page=="Ошибка запуска рейса"){
             Label(44,225,378,205,startupError+"\n"+Application.consoleLogPath,17,Cream);
@@ -60,7 +62,7 @@ public sealed partial class NightRun {
             return;
         }
         if(page=="Управление"){
-            Label(44,220,375,300,"W / S   Газ, тормоз, задний ход\nA / D   Руль      Пробел   Ручник\nE   Погрузка и передача груза\nC   Камера      ПКМ   Осмотреть салон\nV   Запросить диспетчера\nL   Фары      O / H   Двери и капот\nM   Карта      Tab   Груз\nR   Контрольная точка      Esc   Пауза",19,Cream);
+            Label(44,220,375,300,"W / S   Газ, тормоз, задний ход\nA / D   Руль      Пробел   Ручник\nE   Погрузка и передача груза\nC   Сзади / салон / спереди    ПКМ   Обзор\nJ   Дворники    B   Мастерская у базы\nE   Заправка у колонки\nV   Запросить диспетчера\nL   Фары      O / H   Двери и капот\nM   Карта      Tab   Груз\nR   Контрольная точка      Esc   Пауза",19,Cream);
             if(Button(44,552,355,"Назад"))page=returnPage;return;
         }
         float y=232;
@@ -71,6 +73,7 @@ public sealed partial class NightRun {
         if(page=="Пауза"){if(Button(44,y,355,"Вернуться за руль",true))page="Рейс";y+=50;}
         if(Button(44,y,355,"Начать новый рейс",page!="Пауза"))BeginTrip(false);y+=50;
         if(PlayerPrefs.HasKey(Slot)){if(Button(44,y,355,"Продолжить с контрольной точки"))BeginTrip(true);y+=50;}
+        if(page=="Меню"){if(Button(44,y,355,"Мастерская")){returnPage=page;page="Мастерская";}y+=50;}
         if(Button(44,y,355,"Настройки")){returnPage=page;page="Настройки";}y+=50;
         if(Button(44,y,355,"Управление")){returnPage=page;page="Управление";}y+=50;
         if(page!="Меню"){if(Button(44,y,355,"Главное меню"))page="Меню";y+=50;}
@@ -84,6 +87,7 @@ public sealed partial class NightRun {
         Panel(new Rect(957,605,295,87),bg);
         Label(974,610,255,44,$"{car.body.linearVelocity.magnitude*3.6f:0} км/ч",30,Cream,true);
         Label(974,660,268,23,$"Топливо {trip.fuel:0}%    Кузов {trip.health:0}%",16,Gold);
+        if(trip.stalled||trip.tyreFault||trip.heat>60)Label(30,557,850,38,trip.stalled?"Перегрев • отпусти газ и дай двигателю остыть":trip.tyreFault?"Повреждено колесо • заправка или мастерская":$"Двигатель нагревается • {trip.heat:0}%",19,Gold);
         Label(30,607,850,32,Hint(),21,Cream,true);
         if(showRadio)Label(30,644,850,40,radio,17,Cream);
         if(map||cargo){

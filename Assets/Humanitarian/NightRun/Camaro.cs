@@ -38,32 +38,46 @@ public sealed class Camaro : MonoBehaviour
         if(!material || !material.shader.isSupported)throw new System.InvalidOperationException("Недоступен материал "+key);
         return material;
     }
-    public void Assemble() {
-        body=gameObject.AddComponent<Rigidbody>(); body.mass=1450; body.centerOfMass=new Vector3(0,.28f,0);
-        body.interpolation=RigidbodyInterpolation.Interpolate;
-        var shell=gameObject.AddComponent<BoxCollider>();shell.center=new Vector3(0,.66f,0);shell.size=new Vector3(1.82f,.7f,4.88f);
+    public void BuildShell(){
         using(var r=new BinaryReader(new MemoryStream(Resources.Load<TextAsset>("camaro").bytes))) {
             int sections=r.ReadInt32();
             for(int i=0;i<sections;i++) {
                 string group=Encoding.ASCII.GetString(r.ReadBytes(32)).TrimEnd('\0');
                 string atlas=Encoding.ASCII.GetString(r.ReadBytes(32)).TrimEnd('\0');
+                string surface=Encoding.ASCII.GetString(r.ReadBytes(32)).TrimEnd('\0');
                 var pivot=ReadVector(r);
                 if(!parts.TryGetValue(group,out var parent)) {
                     parent=new GameObject(group).transform;parent.SetParent(transform,false);parent.localPosition=pivot;parts.Add(group,parent);
                 }
-                var child=new GameObject("Surface");child.transform.SetParent(parent,false);
-                int count=r.ReadInt32();var v=new Vector3[count];var indices=new int[count];var uv=new Vector2[count];
-                for(int j=0;j<count;j++) {v[j]=ReadVector(r);uv[j]=new Vector2(r.ReadSingle(),r.ReadSingle());indices[j]=j%3==1?j+1:j%3==2?j-1:j;}
-                var m=new Mesh();m.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;m.vertices=v;m.uv=uv;m.triangles=indices;m.RecalculateNormals();m.RecalculateBounds();
+                var child=new GameObject(surface);child.transform.SetParent(parent,false);
+                int count=r.ReadInt32();var v=new Vector3[count];var indices=new int[count];var uv=new Vector2[count];var normals=new Vector3[count];
+                for(int j=0;j<count;j++) {v[j]=ReadVector(r);uv[j]=new Vector2(r.ReadSingle(),r.ReadSingle());normals[j]=ReadVector(r).normalized;indices[j]=j%3==1?j+1:j%3==2?j-1:j;}
+                var m=new Mesh();m.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;m.vertices=v;m.uv=uv;m.triangles=indices;m.normals=normals;m.RecalculateBounds();
                 child.AddComponent<MeshFilter>().sharedMesh=m;
                 bool glass=atlas=="Glass_V5"||atlas=="Side_Tint_V5";
                 var material=new Material(Surface(glass));
                 var texture=Resources.Load<Texture2D>(atlas);
                 if(!texture)throw new InvalidDataException("Нет текстуры "+atlas);
+                material.SetFloat("_Cull",0);
                 material.SetTexture("_BaseMap", texture);
                 child.AddComponent<MeshRenderer>().sharedMaterial=material;
+                if(group=="Roof_pressing"){
+                    var lining=new GameObject("Обивка потолка");lining.transform.SetParent(child.transform,false);
+                    lining.transform.localPosition=Vector3.down*.014f;
+                    lining.AddComponent<MeshFilter>().sharedMesh=m;
+                    var cloth=new Material(Surface(false));cloth.SetFloat("_Cull",0);
+                    cloth.color=new Color(.28f,.25f,.21f);lining.AddComponent<MeshRenderer>().sharedMaterial=cloth;
+                }
             }
         }
+    }
+    public float engineFactor=1;
+    public float revs=800;
+    public void Assemble() {
+        body=gameObject.AddComponent<Rigidbody>(); body.mass=1450; body.centerOfMass=new Vector3(0,.28f,0);
+        body.interpolation=RigidbodyInterpolation.Interpolate;
+        var shell=gameObject.AddComponent<BoxCollider>();shell.center=new Vector3(0,.66f,0);shell.size=new Vector3(1.82f,.7f,4.88f);
+        BuildShell();
         for(int i=0;i<4;i++) {
             var mount=new GameObject(axles[i]+" suspension"); mount.transform.SetParent(transform,false);
             mount.transform.localPosition=parts[axles[i]].localPosition+Vector3.up*.09f;
@@ -87,13 +101,17 @@ public sealed class Camaro : MonoBehaviour
         bool braking=forward*throttle < -.5f;
         for(int i=0;i<4;i++) {
             var w=wheels[i];w.steerAngle=i<2?steer*29:0;
-            w.motorTorque=moving && !braking && i>=2 && Mathf.Abs(forward)<25?throttle*1250:0;
+            w.motorTorque=moving && !braking && i>=2 && Mathf.Abs(forward)<25?throttle*1250*engineFactor:0;
             w.brakeTorque=!moving||hand?3500:braking?2600:Mathf.Abs(throttle)<.05f?45:0;
             w.GetWorldPose(out var p,out var q);parts[axles[i]].SetPositionAndRotation(p,q);
         }
         foreach(var l in stops) l.intensity=braking||hand?3:.35f;
         parts["Steering_Wheel"].localRotation=Quaternion.Euler(0,0,-80*steer);
-        motor.pitch=.8f+Mathf.Abs(forward)*.045f;
+        float kmh=Mathf.Abs(forward)*3.6f;
+        float gearRatio=kmh<24?133:kmh<48?82:kmh<72?57:42;
+        float target=engineFactor<=0?0:Mathf.Clamp(800+kmh*gearRatio+Mathf.Abs(throttle)*470,750,5800);
+        revs=Mathf.MoveTowards(revs,target,Time.fixedDeltaTime*5000);
+        motor.pitch=.65f+revs/3200;motor.volume=engineFactor<=0?0:1;
     }
     void OnCollisionEnter(Collision c){if(c.collider.name!="Ground" && c.relativeVelocity.magnitude>4) impact?.Invoke(c.relativeVelocity.magnitude);}
 }
