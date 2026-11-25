@@ -14,6 +14,14 @@ public sealed partial class NightRun : MonoBehaviour {
     Route route; Trip trip; Camaro car; Camera cam;
     string page="Меню", radio=""; bool cabin, headlights=true, map, cargo;
     bool doors,hood;
+    DriverHands driverHands;
+    CabinRadio transceiver;
+    float pitch,seatLift;
+    bool radioPaused;
+    void Dispatch(){
+        radio="Диспетчер • "+CabinRadio.Messages[trip.stage];
+        transceiver.Call(trip.stage);
+    }
     float steer,gas, sensitivity=1,look; bool hand;
     const string Slot="Humanitarian.NightRoute.1";
     bool worldReady;
@@ -44,6 +52,11 @@ public sealed partial class NightRun : MonoBehaviour {
                 World();
                 car=new GameObject("Ghost Camaro").AddComponent<Camaro>();
                 car.Assemble();
+                driverHands=new GameObject("Руки водителя").AddComponent<DriverHands>();
+                driverHands.transform.SetParent(car.transform,false);
+                driverHands.Fit(car.parts["Steering_Wheel"]);
+                transceiver=new GameObject("Рация диспетчера").AddComponent<CabinRadio>();
+                transceiver.Fit(car.transform);
                 car.impact=Damage;
                 weather=new NightWeather(cam.transform);
                 worldReady=true;
@@ -74,7 +87,7 @@ public sealed partial class NightRun : MonoBehaviour {
     void ResetTrip(bool load){
         trip=load&&PlayerPrefs.HasKey(Slot)?JsonUtility.FromJson<Trip>(PlayerPrefs.GetString(Slot)):new Trip{position=Vector3.up*.3f};
         car.body.isKinematic=false;car.body.linearVelocity=Vector3.zero;car.body.angularVelocity=Vector3.zero;car.body.position=trip.position;car.body.rotation=Quaternion.Euler(0,trip.yaw,0);
-        page="Рейс";radio="Диспетчер • Открой багажник и загрузи три партии.";if(!load && page!="Меню")Save();
+        page="Рейс";Dispatch();if(!load && page!="Меню")Save();
         Sync();
     }
     void Save(){trip.position=car.body.position;trip.yaw=car.transform.eulerAngles.y;PlayerPrefs.SetString(Slot,JsonUtility.ToJson(trip));PlayerPrefs.Save();}
@@ -100,11 +113,11 @@ public sealed partial class NightRun : MonoBehaviour {
         if(!trip.lid)trip.lid=true;
         else if(trip.stage==0){
             int i=Array.IndexOf(trip.status,0);
-            if(i<0){trip.stage++;trip.lid=false;radio="Диспетчер • Продовольствие ждут в Сосновом дворе.";}
+            if(i<0){trip.stage++;trip.lid=false;Dispatch();}
             else if(Mass()+route.cargo[i].kg<=route.capacity)trip.status[i]=1;
         }else{
             int i=trip.stage-1;if(trip.status[i]!=1)return;trip.status[i]=2;trip.stage++;trip.lid=false;
-            radio=i==0?"Диспетчер • Мост закрыт. На развилке держись правой дороги.":"Диспетчер • Следующая точка: "+route.stops[trip.stage].name;
+            Dispatch();
         }
         Sync();Save();
     }
@@ -122,8 +135,16 @@ public sealed partial class NightRun : MonoBehaviour {
             car.parts["Door_L_hinge"].localRotation=Quaternion.Euler(0,doors?58:0,0);
             car.parts["Door_R_hinge"].localRotation=Quaternion.Euler(0,doors?-58:0,0);
         }
-        if(k.eKey.wasPressedThisFrame)Interact();if(k.cKey.wasPressedThisFrame){cabin=!cabin;look=0;}
-        if(Mouse.current!=null && Mouse.current.rightButton.isPressed)look=Mathf.Clamp(look+Mouse.current.delta.x.ReadValue()*sensitivity*.15f,-85,85);
+        if(k.vKey.wasPressedThisFrame)Dispatch();
+        if(k.eKey.wasPressedThisFrame)Interact();if(k.cKey.wasPressedThisFrame){cabin=!cabin;look=0;pitch=0;}
+        if(Mouse.current!=null && Mouse.current.rightButton.isPressed){
+            Vector2 delta=Mouse.current.delta.ReadValue()*sensitivity*.15f;
+            look=Mathf.Clamp(look+delta.x,-85,85);
+            if(cabin)pitch=Mathf.Clamp(pitch-delta.y,-27,52);
+        }else if(cabin){
+            look=Mathf.MoveTowards(look,0,Time.deltaTime*145);
+            pitch=Mathf.MoveTowards(pitch,0,Time.deltaTime*105);
+        }
         if(k.lKey.wasPressedThisFrame){headlights=!headlights;Sync();}
         if(k.mKey.wasPressedThisFrame)map=!map;if(k.tabKey.wasPressedThisFrame)cargo=!cargo;
         if(k.rKey.wasPressedThisFrame)ResetTrip(true);
@@ -138,9 +159,13 @@ public sealed partial class NightRun : MonoBehaviour {
     }
     void LateUpdate(){
         if(!worldReady || trip==null)return;
+        bool pauseRadio=page!="Рейс";
+        if(pauseRadio!=radioPaused){transceiver.Suspend(pauseRadio);radioPaused=pauseRadio;}
+        driverHands.Pose(cabin && page=="Рейс");
         var t=car.transform;var dir=t.rotation*Quaternion.Euler(0,look,0);
-        cam.transform.position=cabin?t.TransformPoint(new Vector3(-.4f,1.02f,.03f)):t.position+dir*new Vector3(0,3.3f,-6.5f);
-        cam.transform.rotation=cabin?dir:Quaternion.LookRotation(t.position+Vector3.up*.7f-cam.transform.position);
+        cam.transform.position=cabin?t.TransformPoint(new Vector3(-.4f,1.135f+seatLift,-.217f)):t.position+dir*new Vector3(0,3.3f,-6.5f);
+        cam.nearClipPlane=cabin ? .022f : .08f;
+        cam.transform.rotation=cabin?dir*Quaternion.Euler(7+pitch,0,0):Quaternion.LookRotation(t.position+Vector3.up*.7f-cam.transform.position);
         weather.Tick(page=="Рейс",weatherMode, fogLevel, cam);
     }
     void DrawMap(){

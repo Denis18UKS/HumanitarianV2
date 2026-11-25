@@ -15,6 +15,7 @@ public sealed partial class NightRun {
         if(PlayerPrefs.HasKey(Prefix+"quality"))QualitySettings.SetQualityLevel(Mathf.Clamp(PlayerPrefs.GetInt(Prefix+"quality"),0,QualitySettings.names.Length-1));
         weatherMode=Mathf.Clamp(PlayerPrefs.GetInt(Prefix+"weather",1),0,2);
         fogLevel=Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix+"fog",.35f));
+        seatLift=Mathf.Clamp(PlayerPrefs.GetFloat(Prefix+"seatLift",0),-.045f,.045f);
         sensitivity=PlayerPrefs.GetFloat(Prefix+"mouse",1);fov=PlayerPrefs.GetFloat(Prefix+"fov",65);
         volume=PlayerPrefs.GetFloat(Prefix+"volume",.75f);fps=Mathf.Clamp(PlayerPrefs.GetInt(Prefix+"fps",1),0,3);
         showRadio=PlayerPrefs.GetInt(Prefix+"radio",1)!=0;
@@ -23,6 +24,7 @@ public sealed partial class NightRun {
     }
     void ApplyOptions(){cam.fieldOfView=fov;AudioListener.volume=volume;QualitySettings.vSyncCount=0;Application.targetFrameRate=Caps[fps];}
     void SaveOptions(){
+        PlayerPrefs.SetFloat(Prefix+"seatLift",seatLift);
         PlayerPrefs.SetInt(Prefix+"weather",weatherMode);PlayerPrefs.SetInt(Prefix+"fps",fps);PlayerPrefs.SetInt(Prefix+"radio",showRadio?1:0);
         PlayerPrefs.SetInt(Prefix+"full",Screen.fullScreen?1:0);PlayerPrefs.SetFloat(Prefix+"fog",fogLevel);PlayerPrefs.SetFloat(Prefix+"mouse",sensitivity);
         PlayerPrefs.SetFloat(Prefix+"volume",volume);PlayerPrefs.SetFloat(Prefix+"fov",fov);PlayerPrefs.Save();
@@ -58,7 +60,7 @@ public sealed partial class NightRun {
             return;
         }
         if(page=="Управление"){
-            Label(44,220,375,300,"W / S   Газ, тормоз, задний ход\nA / D   Руль      Пробел   Ручник\nE   Погрузка и передача груза\nC   Камера      ПКМ   Обзор\nL   Фары      O / H   Двери и капот\nM   Карта      Tab   Груз\nR   Контрольная точка      Esc   Пауза",19,Cream);
+            Label(44,220,375,300,"W / S   Газ, тормоз, задний ход\nA / D   Руль      Пробел   Ручник\nE   Погрузка и передача груза\nC   Камера      ПКМ   Осмотреть салон\nV   Запросить диспетчера\nL   Фары      O / H   Двери и капот\nM   Карта      Tab   Груз\nR   Контрольная точка      Esc   Пауза",19,Cream);
             if(Button(44,552,355,"Назад"))page=returnPage;return;
         }
         float y=232;
@@ -102,7 +104,8 @@ public sealed partial class NightRun {
         if(Button(70,212,365,"Погода   ·   "+Skies[weatherMode])){weatherMode=(weatherMode+1)%Skies.Length;SaveOptions();}
         fogLevel=Slider(70,282,"Плотность тумана",$"{Mathf.Lerp(.011f,.029f,fogLevel):0.000}",fogLevel,0,1);
         sensitivity=Slider(70,359,"Обзор мышью",$"{sensitivity:0.0}×",sensitivity,.3f,2);
-        if(Button(70,453,365,"Радиосообщения   ·   "+(showRadio?"Вкл":"Выкл"))){showRadio=!showRadio;SaveOptions();}
+        if(Button(70,453,365,"Текст рации   ·   "+(showRadio?"Вкл":"Выкл"))){showRadio=!showRadio;SaveOptions();}
+        seatLift=Slider(70,512,"Высота сиденья",$"{seatLift*100:+0.0;-0.0;0} см",seatLift,-.045f,.045f);
         volume=Slider(688,202,"Громкость",$"{volume*100:0}%",volume,0,1);
         fov=Slider(688,280,"Угол обзора",$"{fov:0}°",fov,48,92);
         if(Button(688,366,365,"Частота кадров   ·   "+Caps[fps])){fps=(fps+1)%Caps.Length;SaveOptions();}
