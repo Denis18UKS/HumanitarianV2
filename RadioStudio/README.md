@@ -1,0 +1,2 @@
+# Radio Studio 1.0
+Standalone Windows x64 actor recording tool for Humanitarian. Record or import five lines, listen, process and export ZIP. Use clean mode for in-game radio. Recordings stay local. Obtain signed performer permission separately. GitHub Actions builds the standalone EXE; download RadioStudio-Windows-x64 from Actions artifacts. WebView2 runtime required. The exported game patch is specific to Astra 0.7 and requires Python on the developer PC, not the actor PC. Build does not include a custom icon. No voice samples or game binaries are committed.
