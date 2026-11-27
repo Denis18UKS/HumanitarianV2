@@ -1,0 +1,53 @@
+name: Radio Studio Windows x64
+on:
+  push:
+    branches: [tools/radio-studio-win64]
+    paths: ['RadioStudio/**', '.github/workflows/radio-studio.yml']
+  pull_request:
+    branches: [main]
+    paths: ['RadioStudio/**', '.github/workflows/radio-studio.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: RadioStudio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Test WAV processing and patch format
+        run: python smoke_test.py
+      - name: Build Windows EXE
+        run: >
+          python -m PyInstaller --noconfirm --clean --onefile --windowed
+          --name RadioStudio --add-data "web;web" --add-data "lines.json;."
+          --add-data "game_patch.py;." --add-data "Install_RecordedVoice.cmd;."
+          --add-data "PERMISSION_RU.txt;." --collect-all webview
+          --hidden-import sounddevice --collect-all _sounddevice_data main.py
+      - name: Package actor kit
+        shell: pwsh
+        run: |
+          python collect_notices.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path 'dist/RadioStudio.exe')) { throw 'EXE missing' }
+          Compress-Archive -Path 'dist/RadioStudio.exe','dist/ThirdPartyLicenses','PERMISSION_RU.txt' -DestinationPath 'dist/RadioStudio_ActorKit.zip' -Force
+          Get-FileHash 'dist/RadioStudio.exe' -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RadioStudio-Windows-x64
+          path: |
+            RadioStudio/dist/RadioStudio.exe
+            RadioStudio/dist/RadioStudio_ActorKit.zip
+          if-no-files-found: error
+          retention-days: 30
